@@ -503,6 +503,7 @@ ReadCommand(StringInfo inBuf)
 		if (decompressed_result == -1) {
 			return EOF;
 		}
+		// TODO reject nested compression
 		// TODO split out logic to rerun state management in SocketBackend?
 		return inBuf->data[0];
 	}

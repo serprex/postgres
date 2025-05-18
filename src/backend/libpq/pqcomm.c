@@ -1497,7 +1497,25 @@ socket_putmessage(char msgtype, const char *s, size_t len)
 
 	if (PqCommBusy)
 		return 0;
+
+	if (msgtype != 'z') {
+		// TODO put contained msgtype outside payload to avoid copy?
+		StringInfoData buf;
+		initStringInfo(&buf);
+		enlargeStringInfo(s, len + 1);
+		buf->data[0] = msgtype;
+		memcpy(buf->data + 1, s, len)
+		void *outBuf = palloc(len + 5);
+		uint32_t encoded_len = pg_hton32(len);
+		memcpy(outBuf, &encoded_len, 4);
+		int32_t compressed_len = pglz_compress(buf.data, buf.len, outBuf + 4, PGLZ_strategy_default);
+		int result = socket_putmessage('z', outBuf, compressed_len);
+		pfree(outBuf);
+		return result;
+	}
+
 	PqCommBusy = true;
+
 	if (internal_putbytes(&msgtype, 1))
 		goto fail;
 
