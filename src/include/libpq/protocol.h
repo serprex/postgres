@@ -63,6 +63,7 @@
 
 #define PqMsg_CopyDone				'c'
 #define PqMsg_CopyData				'd'
+#define PqMsg_Compress				'z'
 
 
 /* These are the codes sent by parallel workers to leader processes. */
