@@ -73,6 +73,7 @@
 #endif
 
 #include "common/ip.h"
+#include "common/pg_lzcompress.h"
 #include "libpq/libpq.h"
 #include "miscadmin.h"
 #include "port/pg_bswap.h"
@@ -1502,9 +1503,9 @@ socket_putmessage(char msgtype, const char *s, size_t len)
 		// TODO put contained msgtype outside payload to avoid copy?
 		StringInfoData buf;
 		initStringInfo(&buf);
-		enlargeStringInfo(s, len + 1);
-		buf->data[0] = msgtype;
-		memcpy(buf->data + 1, s, len)
+		enlargeStringInfo(&buf, len + 1);
+		buf.data[0] = msgtype;
+		memcpy(buf.data + 1, s, len);
 		void *outBuf = palloc(len + 5);
 		uint32_t encoded_len = pg_hton32(len);
 		memcpy(outBuf, &encoded_len, 4);

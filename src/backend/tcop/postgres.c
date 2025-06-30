@@ -40,6 +40,7 @@
 #include "commands/explain_state.h"
 #include "commands/prepare.h"
 #include "common/pg_prng.h"
+#include "common/pg_lzcompress.h"
 #include "jit/jit.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
@@ -487,8 +488,8 @@ ReadCommand(StringInfo inBuf)
 	else
 		result = InteractiveBackend(inBuf);
 
-	if (result == PgMsg_Compress) {
-		int32 rawsize = pg_ntoh32(inBuf->data);
+	if (result == PqMsg_Compress) {
+		int32 rawsize = pg_ntoh32(*(int32*)inBuf->data);
 		if (rawsize > PQ_LARGE_MESSAGE_LIMIT) {
 			return EOF;
 		}
