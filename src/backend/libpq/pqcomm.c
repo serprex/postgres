@@ -1502,7 +1502,10 @@ socket_putmessage(char msgtype, const char *s, size_t len)
 	if (msgtype != PqMsg_Compress &&
 		msgtype != PqMsg_AuthenticationRequest &&
 		msgtype != PqMsg_ErrorResponse &&
-		msgtype != PqMsg_NegotiateProtocolVersion) {
+		msgtype != PqMsg_NegotiateProtocolVersion &&
+		msgtype != PqMsg_PasswordMessage &&
+		msgtype != PqMsg_SASLResponse &&
+		msgtype != PqMsg_GSSResponse) {
 		void *outBuf = palloc(len + 5);
 		uint32_t encoded_len = pg_hton32(len);
 		*((char*)outBuf) = msgtype;
