@@ -1499,17 +1499,15 @@ socket_putmessage(char msgtype, const char *s, size_t len)
 	if (PqCommBusy)
 		return 0;
 
-	if (msgtype != 'z') {
-		// TODO put contained msgtype outside payload to avoid copy?
-		StringInfoData buf;
-		initStringInfo(&buf);
-		enlargeStringInfo(&buf, len + 1);
-		buf.data[0] = msgtype;
-		memcpy(buf.data + 1, s, len);
+	if (msgtype != PqMsg_Compress &&
+		msgtype != PqMsg_AuthenticationRequest &&
+		msgtype != PqMsg_ErrorResponse &&
+		msgtype != PqMsg_NegotiateProtocolVersion) {
 		void *outBuf = palloc(len + 5);
 		uint32_t encoded_len = pg_hton32(len);
-		memcpy(outBuf, &encoded_len, 4);
-		int32_t compressed_len = pglz_compress(buf.data, buf.len, outBuf + 4, PGLZ_strategy_default);
+		*((char*)outBuf) = msgtype;
+		memcpy(outBuf + 1, &encoded_len, 4);
+		int32_t compressed_len = pglz_compress(s, len, outBuf + 5, PGLZ_strategy_default);
 		int result = socket_putmessage('z', outBuf, compressed_len);
 		pfree(outBuf);
 		return result;

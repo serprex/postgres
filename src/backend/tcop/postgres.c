@@ -489,24 +489,26 @@ ReadCommand(StringInfo inBuf)
 		result = InteractiveBackend(inBuf);
 
 	if (result == PqMsg_Compress) {
-		int32 rawsize = pg_ntoh32(*(int32*)inBuf->data);
+		char msgtype = inBuf->data[0];
+		int32 rawsize = pg_ntoh32(*(int32*)(inBuf->data + 1));
 		if (rawsize > PQ_LARGE_MESSAGE_LIMIT) {
 			return EOF;
 		}
 
-		const char *compressed = pstrdup(inBuf->data);
-		const char compressed_len = inBuf->len - 4;
+		char *compressed = pstrdup(inBuf->data + 5);
+		const char compressed_len = inBuf->len - 5;
 		resetStringInfo(inBuf);
-		enlargeStringInfo(inBuf, rawsize);
+		enlargeStringInfo(inBuf, rawsize + 1);
+		inBuf->data[0] = msgtype;
 
-		int32 decompressed_result = pglz_decompress(compressed + 4, compressed_len, inBuf->data, rawsize, true);
+		int32 decompressed_result = pglz_decompress(compressed + 5, compressed_len, inBuf->data + 1, rawsize, true);
 		pfree(compressed);
 		if (decompressed_result == -1) {
 			return EOF;
 		}
 		// TODO reject nested compression
 		// TODO split out logic to rerun state management in SocketBackend?
-		return inBuf->data[0];
+		return msgtype;
 	}
 
 	return result;
