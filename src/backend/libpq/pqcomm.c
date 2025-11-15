@@ -1503,6 +1503,9 @@ socket_putmessage(char msgtype, const char *s, size_t len)
 		msgtype != PqMsg_AuthenticationRequest &&
 		msgtype != PqMsg_ErrorResponse &&
 		msgtype != PqMsg_NegotiateProtocolVersion &&
+		msgtype != PqMsg_NoticeResponse &&
+		msgtype != PqMsg_NotificationResponse &&
+		msgtype != PqMsg_ParameterStatus &&
 		msgtype != PqMsg_PasswordMessage &&
 		msgtype != PqMsg_SASLResponse &&
 		msgtype != PqMsg_GSSResponse) {
@@ -1511,7 +1514,7 @@ socket_putmessage(char msgtype, const char *s, size_t len)
 		*((char*)outBuf) = msgtype;
 		memcpy(outBuf + 1, &encoded_len, 4);
 		int32_t compressed_len = pglz_compress(s, len, outBuf + 5, PGLZ_strategy_default);
-		int result = socket_putmessage('z', outBuf, compressed_len);
+		int result = socket_putmessage(PqMsg_Compress, outBuf, compressed_len + 5);
 		pfree(outBuf);
 		return result;
 	}

@@ -30,13 +30,15 @@
 #include "libpq-int.h"
 #include "mb/pg_wchar.h"
 #include "port/pg_bswap.h"
+#include "common/pg_lzcompress.h"
 
 /*
  * This macro lists the backend message types that could be "long" (more
  * than a couple of kilobytes).
  */
 #define VALID_LONG_MESSAGE_TYPE(id) \
-	((id) == PqMsg_CopyData || \
+	((id) == PqMsg_Compress || \
+	 (id) == PqMsg_CopyData || \
 	 (id) == PqMsg_DataRow || \
 	 (id) == PqMsg_ErrorResponse || \
 	 (id) == PqMsg_FunctionCallResponse || \
@@ -199,8 +201,49 @@ pqParseInput3(PGconn *conn)
 			/*
 			 * In BUSY state, we can process everything.
 			 */
+reprocessDecompressed:
 			switch (id)
 			{
+				case PqMsg_Compress: {
+					id = conn->inBuffer[conn->inCursor];
+					int32 rawsize = pg_ntoh32(*(int32*)(conn->inBuffer + conn->inCursor + 1));
+					const char compressed_len = msgLength - 5;
+
+					/*
+					// copy compressed bytes out to replace with uncompressed bytes
+					char *compressed = palloc(msgLength);
+					if (compressed == NULL) {
+						appendPQExpBufferStr(&conn->errorMessage,
+											 "cannot allocate memory to decompress input buffer\n");
+						handleFatalError(conn);
+						return;
+					}
+					memcpy(compressed, conn->inBuffer + conn->inCursor + 5, compressed_len);
+
+					conn->inCursor += msgLength;
+					*/
+
+					if (pqCheckInBufferSpace(conn->inCursor + (size_t) msgLength + (size_t) rawsize,
+											 conn))
+					{
+						// pfree(compressed);
+						handleFatalError(conn);
+						return;
+					}
+
+					int32 decompressed_result = pglz_decompress(conn->inBuffer + conn->inCursor + 5, compressed_len, conn->inBuffer + conn->inCursor + msgLength, rawsize, true);
+					// pfree(compressed);
+					if (decompressed_result == -1) {
+						appendPQExpBufferStr(&conn->errorMessage, "cannot decompress input buffer\n");
+						handleFatalError(conn);
+						return;
+					}
+					// TODO reject nested compression
+					// TODO split out logic to rerun state management in SocketBackend?
+					conn->inCursor += msgLength;
+					goto reprocessDecompressed;
+				}
+					break;
 				case PqMsg_CommandComplete:
 					if (pqGets(&conn->workBuffer, conn))
 						return;
