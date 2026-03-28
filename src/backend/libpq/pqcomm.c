@@ -1509,14 +1509,18 @@ socket_putmessage(char msgtype, const char *s, size_t len)
 		msgtype != PqMsg_PasswordMessage &&
 		msgtype != PqMsg_SASLResponse &&
 		msgtype != PqMsg_GSSResponse) {
-		void *outBuf = palloc(len + 5);
+		void *outBuf = palloc(PGLZ_MAX_OUTPUT(len) + 5);
 		uint32_t encoded_len = pg_hton32(len);
 		*((char*)outBuf) = msgtype;
 		memcpy(outBuf + 1, &encoded_len, 4);
-		int32_t compressed_len = pglz_compress(s, len, outBuf + 5, PGLZ_strategy_default);
-		int result = socket_putmessage(PqMsg_Compress, outBuf, compressed_len + 5);
+		int32 compressed_len = pglz_compress(s, len, outBuf + 5, PGLZ_strategy_default);
+		if (compressed_len >= 0)
+		{
+			int result = socket_putmessage(PqMsg_Compress, outBuf, compressed_len + 5);
+			pfree(outBuf);
+			return result;
+		}
 		pfree(outBuf);
-		return result;
 	}
 
 	PqCommBusy = true;

@@ -207,40 +207,44 @@ reprocessDecompressed:
 				case PqMsg_Compress: {
 					id = conn->inBuffer[conn->inCursor];
 					int32 rawsize = pg_ntoh32(*(int32*)(conn->inBuffer + conn->inCursor + 1));
-					const char compressed_len = msgLength - 5;
+					int32 compressed_len = msgLength - 5;
+					int remaining = conn->inEnd - (conn->inCursor + msgLength);
 
-					/*
-					// copy compressed bytes out to replace with uncompressed bytes
-					char *compressed = palloc(msgLength);
+					/* copy compressed data out before buffer manipulation */
+					char *compressed = malloc(compressed_len);
 					if (compressed == NULL) {
 						appendPQExpBufferStr(&conn->errorMessage,
-											 "cannot allocate memory to decompress input buffer\n");
+											 "out of memory decompressing input\n");
 						handleFatalError(conn);
 						return;
 					}
 					memcpy(compressed, conn->inBuffer + conn->inCursor + 5, compressed_len);
 
-					conn->inCursor += msgLength;
-					*/
-
-					if (pqCheckInBufferSpace(conn->inCursor + (size_t) msgLength + (size_t) rawsize,
+					if (pqCheckInBufferSpace(conn->inCursor + (size_t) rawsize + remaining,
 											 conn))
 					{
-						// pfree(compressed);
+						free(compressed);
 						handleFatalError(conn);
 						return;
 					}
 
-					int32 decompressed_result = pglz_decompress(conn->inBuffer + conn->inCursor + 5, compressed_len, conn->inBuffer + conn->inCursor + msgLength, rawsize, true);
-					// pfree(compressed);
+					/* shift remaining data to make room for decompressed output */
+					if (remaining > 0)
+						memmove(conn->inBuffer + conn->inCursor + rawsize,
+								conn->inBuffer + conn->inCursor + msgLength,
+								remaining);
+
+					int32 decompressed_result = pglz_decompress(compressed, compressed_len,
+																conn->inBuffer + conn->inCursor,
+																rawsize, true);
+					free(compressed);
 					if (decompressed_result == -1) {
 						appendPQExpBufferStr(&conn->errorMessage, "cannot decompress input buffer\n");
 						handleFatalError(conn);
 						return;
 					}
-					// TODO reject nested compression
-					// TODO split out logic to rerun state management in SocketBackend?
-					conn->inCursor += msgLength;
+					conn->inEnd += rawsize - msgLength;
+					msgLength = rawsize;
 					goto reprocessDecompressed;
 				}
 					break;

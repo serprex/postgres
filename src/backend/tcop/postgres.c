@@ -445,6 +445,10 @@ SocketBackend(StringInfo inBuf)
 			doing_extended_query_message = false;
 			break;
 
+		case PqMsg_Compress:
+			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
+			break;
+
 		default:
 
 			/*
@@ -495,19 +499,18 @@ ReadCommand(StringInfo inBuf)
 			return EOF;
 		}
 
-		char *compressed = pstrdup(inBuf->data + 5);
-		const char compressed_len = inBuf->len - 5;
+		int32 compressed_len = inBuf->len - 5;
+		char *compressed = palloc(compressed_len);
+		memcpy(compressed, inBuf->data + 5, compressed_len);
 		resetStringInfo(inBuf);
-		enlargeStringInfo(inBuf, rawsize + 1);
-		inBuf->data[0] = msgtype;
+		enlargeStringInfo(inBuf, rawsize);
 
-		int32 decompressed_result = pglz_decompress(compressed + 5, compressed_len, inBuf->data + 1, rawsize, true);
+		int32 decompressed_result = pglz_decompress(compressed, compressed_len, inBuf->data, rawsize, true);
 		pfree(compressed);
 		if (decompressed_result == -1) {
 			return EOF;
 		}
-		// TODO reject nested compression
-		// TODO split out logic to rerun state management in SocketBackend?
+		inBuf->len = rawsize;
 		return msgtype;
 	}
 
